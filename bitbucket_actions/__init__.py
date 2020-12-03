@@ -9,26 +9,30 @@ from aws_cdk.aws_s3 import Bucket
 from aws_cdk.aws_secretsmanager import Secret, SecretStringGenerator
 
 
-class BitbucketSourceS3Action(actions.S3SourceAction):
+class BitbucketSourceS3Action(core.Construct):
     def __init__(
             self,
             scope: core.Construct,
+            construct_id: str,
+            *,
             bucket: Bucket,
             bitbucket_url: str,
             bucket_key_prefix: str,
             project_name: str,
             repo_name: str,
             token: Secret,
-            output: Artifact,
+            artifact: Artifact,
             trigger: bool = True,
             secret_length: int = 24,
             branch: str = 'master',
     ) -> None:
+        super().__init__(scope, construct_id)
+
         secret = Secret(scope, 'secret', generate_secret_string=SecretStringGenerator(password_length=secret_length))
 
         self.s3prefix = 'source/'+bucket_key_prefix
         function = PythonFunction(self, 'lambda',
-                                  entry=realpath(dirname(__file__)+"/../functions/bitbucket-notifications"),
+                                  entry=realpath(dirname(__file__)+"/function"),
                                   environment={
                                       "BITBUCKET_SERVER_URL": bitbucket_url,
                                       "BITBUCKET_TOKEN_ID": token.secret_name,
@@ -59,7 +63,7 @@ class BitbucketSourceS3Action(actions.S3SourceAction):
         else:
             t = actions.S3Trigger.NONE
 
-        super().__init__(
+        self.action = actions.S3SourceAction(
             action_name="Source",
             bucket=bucket,
             bucket_key='%s/%s/%s/%s.zip' % (
@@ -69,5 +73,5 @@ class BitbucketSourceS3Action(actions.S3SourceAction):
                 branch
             ),
             trigger=t,
-            output=output,
+            output=artifact,
         )

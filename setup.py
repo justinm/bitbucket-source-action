@@ -1,3 +1,5 @@
+from glob import glob
+
 import setuptools
 
 
@@ -15,10 +17,15 @@ setuptools.setup(
 
     author="Justin McCormick <me@justinmccormick.com>",
 
+    packages=['bitbucket_actions'],
+
     package_dir={
-        "": "aws_cdk",
+        'bitbucket_actions': 'bitbucket_actions',
     },
-    packages=setuptools.find_packages(where='aws_cdk'),
+
+    package_data={
+        'bitbucket_actions': ['function/*']
+    },
 
     install_requires=[
         "aws-cdk.core>=1.76.0",
