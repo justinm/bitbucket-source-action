@@ -30,31 +30,27 @@ class BitbucketSourceS3Action(core.Construct):
     ) -> None:
         super().__init__(scope, construct_id)
 
-        secret = Secret(scope, 'secret', generate_secret_string=SecretStringGenerator(password_length=secret_length))
+        self.secret = Secret(scope, 'secret', generate_secret_string=SecretStringGenerator(password_length=secret_length))
 
-        function = PythonFunction(self, 'lambda',
-                                  entry=realpath(dirname(__file__)+"/function"),
-                                  environment={
-                                      "BITBUCKET_SERVER_URL": bitbucket_url,
-                                      "BITBUCKET_TOKEN_ID": token.secret_name,
-                                      "BITBUCKET_SECRET_ID": secret.secret_name,
-                                      "PROJECT_NAME": project_name,
-                                      "REPO_NAME": repo_name,
-                                      "S3BUCKET": bucket.bucket_name,
-                                      "S3PREFIX": bucket_key_prefix,
-                                  })
+        self.function = PythonFunction(self, 'lambda',
+                                       entry=realpath(dirname(__file__)+"/function"),
+                                       environment={
+                                           "BITBUCKET_SERVER_URL": bitbucket_url,
+                                           "BITBUCKET_TOKEN_ID": token.secret_name,
+                                           "BITBUCKET_SECRET_ID": self.secret.secret_name,
+                                           "PROJECT_NAME": project_name,
+                                           "REPO_NAME": repo_name,
+                                           "S3BUCKET": bucket.bucket_name,
+                                           "S3PREFIX": bucket_key_prefix,
+                                       })
 
-        bucket.grant_read_write(function)
-        secret.grant_read(function)
+        bucket.grant_read_write(self.function)
+        self.secret.grant_read(self.function)
 
-        notifications_integration = LambdaProxyIntegration(handler=function,
+        notifications_integration = LambdaProxyIntegration(handler=self.function,
                                                            payload_format_version=PayloadFormatVersion.VERSION_1_0)
 
-        api = HttpApi(scope, "http-api", default_integration=notifications_integration)
-
-        core.CfnOutput(scope, 'webhook-url-output',
-                       export_name='notification-webhook-url',
-                       value="https://%s.execute-api.%s.amazonaws.com" % (api.http_api_id, scope.region))
+        self.api = HttpApi(scope, "http-api", default_integration=notifications_integration)
 
         if trigger:
             t = actions.S3Trigger.EVENTS
@@ -72,5 +68,11 @@ class BitbucketSourceS3Action(core.Construct):
             bucket_key=self.bucket_key,
             output=output,
             action_name=action_name,
+            trigger=t,
             **kwargs
         )
+
+        core.CfnOutput(scope, 'bitbucket-notification-endpoint',
+                       value="https://%s.execute-api.%s.amazonaws.com" % (self.api.http_api_id, scope.region))
+
+        core.CfnOutput(scope, 'bitbucket-secret-arn', value=self.secret.secret_arn)
