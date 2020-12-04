@@ -15,22 +15,23 @@ class BitbucketSourceS3Action(core.Construct):
             scope: core.Construct,
             construct_id: str,
             *,
+            action_name: str,
             bucket: Bucket,
             bitbucket_url: str,
             bucket_key_prefix: str,
             project_name: str,
             repo_name: str,
             token: Secret,
-            artifact: Artifact,
+            output: Artifact,
             trigger: bool = True,
             secret_length: int = 24,
             branch: str = 'master',
+            **kwargs
     ) -> None:
         super().__init__(scope, construct_id)
 
         secret = Secret(scope, 'secret', generate_secret_string=SecretStringGenerator(password_length=secret_length))
 
-        self.s3prefix = 'source/'+bucket_key_prefix
         function = PythonFunction(self, 'lambda',
                                   entry=realpath(dirname(__file__)+"/function"),
                                   environment={
@@ -46,9 +47,6 @@ class BitbucketSourceS3Action(core.Construct):
         bucket.grant_read_write(function)
         secret.grant_read(function)
 
-        self.bucket = core.CfnOutput(scope, 'vcs-source-bucket-arn-output', value=bucket.bucket_arn,
-                                     export_name='vcs-source-bucket-arn-output')
-
         notifications_integration = LambdaProxyIntegration(handler=function,
                                                            payload_format_version=PayloadFormatVersion.VERSION_1_0)
 
@@ -63,15 +61,16 @@ class BitbucketSourceS3Action(core.Construct):
         else:
             t = actions.S3Trigger.NONE
 
+        self.bucket_key = '%s/%s/%s/%s.zip' % (
+            bucket_key_prefix,
+            project_name,
+            repo_name,
+            branch
+        )
         self.action = actions.S3SourceAction(
-            action_name="Source",
             bucket=bucket,
-            bucket_key='%s/%s/%s/%s.zip' % (
-                bucket_key_prefix,
-                project_name,
-                repo_name,
-                branch
-            ),
-            trigger=t,
-            output=artifact,
+            bucket_key=self.bucket_key,
+            output=output,
+            action_name=action_name,
+            **kwargs
         )
